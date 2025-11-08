@@ -130,7 +130,7 @@ function App() {
               <div className="bg-red-600 p-2 rounded-lg">
                 <Film className="w-6 h-6 text-white" />
               </div>
-              <h1 className="text-xl font-bold text-gray-900">VideoHub</h1>
+              <h1 className="text-xl font-bold text-gray-900">VideoIndex</h1>
             </div>
 
             <div className="flex-1 max-w-2xl">

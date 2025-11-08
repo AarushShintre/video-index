@@ -15,7 +15,10 @@ export const videoAPI = {
       onUploadProgress: onProgress
     }),
   updateVideo: (id, data) => api.put(`/videos/${id}`, data),
-  deleteVideo: (id) => api.delete(`/videos/${id}`)
+  deleteVideo: (id) => api.delete(`/videos/${id}`),
+  findSimilarVideos: (videoId, videoPath, k = 5) => 
+    api.post(`/videos/${videoId}/similar`, { video_id: videoId, video_path: videoPath, k }),
+  checkSemanticSearchHealth: () => api.get('/videos/semantic-search/health')
 };
 
 export default api;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, Play, X, Search, Grid3x3, List, Trash2, Edit2, Save, Film, Eye, Calendar } from 'lucide-react';
+import { Upload, Play, X, Search, Grid3x3, List, Trash2, Edit2, Save, Film, Eye, Calendar, Sparkles, Loader2 } from 'lucide-react';
 import { videoAPI } from './services/api';
 
 function App() {
@@ -12,11 +12,39 @@ function App() {
   const [sortBy, setSortBy] = useState('newest');
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState({});
+  const [similarVideos, setSimilarVideos] = useState([]);
+  const [loadingSimilar, setLoadingSimilar] = useState(false);
+  const [semanticSearchAvailable, setSemanticSearchAvailable] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     loadVideos();
+    checkSemanticSearch();
   }, [searchTerm, sortBy]);
+
+  const checkSemanticSearch = async () => {
+    try {
+      const response = await videoAPI.checkSemanticSearchHealth();
+      setSemanticSearchAvailable(response.data.status === 'ok');
+    } catch (error) {
+      setSemanticSearchAvailable(false);
+    }
+  };
+
+  const loadSimilarVideos = async (videoId, videoPath) => {
+    if (!semanticSearchAvailable) return;
+    
+    setLoadingSimilar(true);
+    try {
+      const response = await videoAPI.findSimilarVideos(videoId, videoPath, 5);
+      setSimilarVideos(response.data.results || []);
+    } catch (error) {
+      console.error('Error loading similar videos:', error);
+      setSimilarVideos([]);
+    } finally {
+      setLoadingSimilar(false);
+    }
+  };
 
   const loadVideos = async () => {
     try {
@@ -58,9 +86,16 @@ function App() {
   const handleVideoClick = async (videoId) => {
     try {
       const response = await videoAPI.getVideoById(videoId);
-      setSelectedVideo(response.data);
-      setEditData(response.data);
+      const video = response.data;
+      setSelectedVideo(video);
+      setEditData(video);
       setEditing(false);
+      
+      // Load similar videos if semantic search is available
+      if (semanticSearchAvailable) {
+        // Pass both video_id and filepath - the service will handle path resolution
+        loadSimilarVideos(videoId, video.filepath);
+      }
     } catch (error) {
       console.error('Error loading video:', error);
     }
@@ -373,6 +408,62 @@ function App() {
                     💡 In production: Use AWS Transcribe to auto-generate this
                   </p>
                 </div>
+
+                {semanticSearchAvailable && (
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-purple-600" />
+                      Similar Videos (Semantic Search)
+                    </label>
+                    {loadingSimilar ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+                        <span className="ml-2 text-gray-600">Finding similar videos...</span>
+                      </div>
+                    ) : similarVideos.length > 0 ? (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {similarVideos.map((result, idx) => {
+                          // Extract video filename from path
+                          const filename = result.video_path.split(/[/\\]/).pop();
+                          const similarity = Math.round(result.similarity * 100);
+                          
+                          return (
+                            <div
+                              key={idx}
+                              className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:border-purple-400 transition cursor-pointer"
+                              onClick={() => {
+                                // Find video by filename in our videos list
+                                const video = videos.find(v => v.filepath === filename || v.filename === filename);
+                                if (video) {
+                                  handleVideoClick(video.id);
+                                }
+                              }}
+                            >
+                              <div className="aspect-video bg-gray-900 rounded mb-2 overflow-hidden">
+                                <video 
+                                  src={`http://localhost:5000/uploads/${filename}`}
+                                  className="w-full h-full object-cover"
+                                  muted
+                                />
+                              </div>
+                              <div className="text-xs text-gray-600">
+                                <div className="font-medium text-gray-900 truncate">{filename}</div>
+                                <div className="text-purple-600 mt-1">{similarity}% similar</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="bg-gray-50 rounded-lg p-4 border text-center text-gray-500 text-sm">
+                        No similar videos found. Make sure videos are indexed for semantic search.
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-2">
+                      💡 Similar videos are found using visual content analysis (ResNet-50 embeddings)
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

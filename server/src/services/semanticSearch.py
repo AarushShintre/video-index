@@ -81,16 +81,34 @@ def health():
     })
 
 
+@app.route('/routes', methods=['GET'])
+def list_routes():
+    """List all registered routes for debugging."""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'path': str(rule)
+        })
+    return jsonify({'routes': routes})
+
+
 @app.route('/search', methods=['POST'])
+@app.route('/search/', methods=['POST'])  # Also handle trailing slash
 def search_similar():
     """Find similar videos to a query video."""
     global faiss_index, pca_model, normalize_embeddings, use_cosine, extractor
+    
+    print(f"DEBUG: /search endpoint called. Method: {request.method}, Path: {request.path}")
     
     if faiss_index is None:
         return jsonify({'error': 'Semantic search index not loaded'}), 500
     
     try:
         data = request.json
+        if data is None:
+            return jsonify({'error': 'No JSON data provided'}), 400
         video_path = data.get('video_path')
         video_id = data.get('video_id')
         k = data.get('k', 5)
@@ -212,6 +230,23 @@ def add_video():
         return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
 
+@app.errorhandler(404)
+def not_found(error):
+    """Handle 404 errors and show available routes."""
+    available_routes = []
+    for rule in app.url_map.iter_rules():
+        available_routes.append({
+            'path': str(rule),
+            'methods': list(rule.methods)
+        })
+    return jsonify({
+        'error': 'Route not found',
+        'requested_path': request.path,
+        'requested_method': request.method,
+        'available_routes': available_routes
+    }), 404
+
+
 if __name__ == '__main__':
     import argparse
     
@@ -252,6 +287,13 @@ if __name__ == '__main__':
     
     # Load models
     if load_semantic_search_models(args.results_dir):
+        # Print registered routes for debugging
+        print("\n📋 Registered routes:")
+        for rule in app.url_map.iter_rules():
+            methods = ', '.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
+            print(f"  {methods:20} {rule}")
+        print()
+        
         print(f"✅ Semantic search service ready on port {args.port}")
         app.run(host='0.0.0.0', port=args.port, debug=True)
     else:

@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import videoRoutes from './routes/videos.js';
+import semanticSearchRoutes from './services/semanticSearch.js';
 import { initDatabase } from './config/database.js';
 
 dotenv.config();
@@ -15,6 +16,7 @@ app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use('/uploads', express.static(process.env.UPLOAD_DIR));
 
 app.use('/api/videos', videoRoutes);
+app.use('/api/semantic-search', semanticSearchRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Server is running' });

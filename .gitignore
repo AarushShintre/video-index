@@ -44,3 +44,6 @@ ehthumbs.db
 Desktop.ini
 
 server/uploads
+
+__pycache__/
+*.pyc

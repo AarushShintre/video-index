@@ -1,3 +1,5 @@
+print("✅ semanticSearchHelper.py STARTING")
+
 import os
 import sys
 import json
@@ -99,20 +101,30 @@ def save_updated_index(results_dir):
     )
 
 def main():
+    print("✅ main() started")
+
     args = json.loads(sys.argv[1])
     operation = args.get("operation")
     results_dir = args.get("results_dir")
     video_path = args.get("video_path")
 
-    load_models(results_dir)
+    print("✅ operation:", operation)
+    print("✅ video_path:", video_path)
+    print("✅ results_dir:", results_dir)
 
-    # ✅ Add new video to FAISS index
+    load_models(results_dir)
+    print("✅ models loaded")
+
     if operation == "add_to_index":
+        print("✅ ADDING TO INDEX...")
+
         if not os.path.exists(video_path):
             print(json.dumps({"error": "video not found"}))
             return
         
         embedding = extract_embedding(video_path, model, preprocess)
+        print("✅ embedding extracted?", embedding is not None)
+
         if embedding is None:
             print(json.dumps({"error": "could not extract embedding"}))
             return
@@ -121,40 +133,37 @@ def main():
 
         # PCA if needed
         if "pca_model" in globals() and pca_model is not None:
+            print("✅ applying PCA")
             emb = pca_model.transform(emb.reshape(1, -1)).flatten()
 
-        # Normalize if enabled
+        # Normalize if needed
         if normalize_embeddings:
+            print("✅ normalizing vectors")
             from sklearn.preprocessing import normalize
             emb = normalize(emb.reshape(1, -1), norm="l2").flatten()
 
-        # Convert to FAISS shape
         vec = emb.reshape(1, -1).astype("float32")
 
-        # Create index if first entry
         if faiss_index is None:
+            print("✅ creating new FAISS index")
             dims = vec.shape[1]
-            faiss_index = faiss.IndexFlatL2(dims)
+            globals()["faiss_index"] = faiss.IndexFlatL2(dims)
 
         faiss_index.add(vec)
         video_files.append(video_path)
 
+        print("✅ saving FAISS index...")
         save_updated_index(results_dir)
 
         print(json.dumps({"success": True, "index_size": faiss_index.ntotal}))
-
-    # ✅ Existing search operation (unchanged)
-    elif operation == "search":
-        query = args.get("query_vector")
-        vec = np.array(query, dtype="float32").reshape(1, -1)
-        D, I = faiss_index.search(vec, 5)
-
-        results = []
-        for idx in I[0]:
-            if idx < len(video_files):
-                results.append(video_files[idx])
-
-        print(json.dumps({"results": results}))
+    
+print("✅ semanticSearchHelper.py STARTING")
 
 if __name__ == "__main__":
-    main()
+    print("✅ ENTERED main() guard")
+    try:
+        main()
+    except Exception as e:
+        print("❌ ERROR IN main:", str(e))
+
+

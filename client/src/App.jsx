@@ -31,6 +31,64 @@ function App() {
     }
   };
 
+  const loadVideos = async () => {
+    try {
+      const response = await videoAPI.getAllVideos({ search: searchTerm, sort: sortBy });
+      setVideos(response.data);
+    } catch (error) {
+      console.error('Error loading videos:', error);
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    try {
+      const file = e.target.files[0];
+      const formData = new FormData();
+      formData.append("video", file);
+
+      // ✅ Step 1: Upload video to backend
+      const uploadRes = await videoAPI.uploadVideo(formData);
+
+      // ✅ Step 2: Update semantic index
+      await videoAPI.updateSemanticIndex(uploadRes.data.full_path);
+
+      alert("✅ Video uploaded and added to search index!");
+
+      // reload list
+      loadVideos();
+
+    } catch (err) {
+      console.error("❌ Index update error:", err);
+
+      if (err.response) {
+        console.log("📌 RESPONSE DATA:", err.response.data);
+        console.log("📌 STATUS:", err.response.status);
+      } else if (err.request) {
+        console.log("📌 NO RESPONSE:", err.request);
+      } else {
+        console.log("📌 UNKNOWN ERROR:", err.message);
+      }
+
+      alert("❌ Upload succeeded but index update failed");
+    }
+  };
+
+  const handleVideoClick = async (videoId) => {
+    try {
+      const response = await videoAPI.getVideoById(videoId);
+      const video = response.data;
+      setSelectedVideo(video);
+      setEditData(video);
+      setEditing(false);
+
+      if (semanticSearchAvailable) {
+        loadSimilarVideos(videoId, video.filepath);
+      }
+    } catch (error) {
+      console.error('Error loading video:', error);
+    }
+  };
+
   const loadSimilarVideos = async (videoId, videoPath) => {
     if (!semanticSearchAvailable) return;
     
@@ -43,61 +101,6 @@ function App() {
       setSimilarVideos([]);
     } finally {
       setLoadingSimilar(false);
-    }
-  };
-
-  const loadVideos = async () => {
-    try {
-      const response = await videoAPI.getAllVideos({ search: searchTerm, sort: sortBy });
-      setVideos(response.data);
-    } catch (error) {
-      console.error('Error loading videos:', error);
-    }
-  };
-
-  const handleFileUpload = async (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-
-    setUploading(true);
-
-    for (const file of files) {
-      try {
-        const formData = new FormData();
-        formData.append('video', file);
-        formData.append('title', file.name.replace(/\.[^/.]+$/, ''));
-
-        await videoAPI.uploadVideo(formData, (progressEvent) => {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setUploadProgress(percentCompleted);
-        });
-      } catch (error) {
-        console.error('Upload error:', error);
-        alert(`Failed to upload ${file.name}`);
-      }
-    }
-
-    setUploading(false);
-    setUploadProgress(0);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    loadVideos();
-  };
-
-  const handleVideoClick = async (videoId) => {
-    try {
-      const response = await videoAPI.getVideoById(videoId);
-      const video = response.data;
-      setSelectedVideo(video);
-      setEditData(video);
-      setEditing(false);
-      
-      // Load similar videos if semantic search is available
-      if (semanticSearchAvailable) {
-        // Pass both video_id and filepath - the service will handle path resolution
-        loadSimilarVideos(videoId, video.filepath);
-      }
-    } catch (error) {
-      console.error('Error loading video:', error);
     }
   };
 
@@ -126,7 +129,8 @@ function App() {
     }
   };
 
-  const formatBytes = (bytes) => {
+
+    const formatBytes = (bytes) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -155,6 +159,7 @@ function App() {
     if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
     return `${Math.floor(diffDays / 365)} years ago`;
   };
+
 
   return (
     <div className="min-h-screen bg-gray-50">

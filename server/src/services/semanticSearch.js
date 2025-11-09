@@ -1,194 +1,46 @@
-/**
- * Express service for semantic video search using FAISS and embeddings.
- * Calls Python scripts for embedding extraction and FAISS operations.
- */
+import { exec } from "child_process";
+import path from "path";
+import util from "util";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
 
-import express from 'express';
-import cors from 'cors';
-import { spawn } from 'child_process';
-import { fileURLToPath } from 'url';
-import { dirname, join, resolve } from 'path';
-import { existsSync, readFileSync } from 'fs';
-import { promisify } from 'util';
-import { exec } from 'child_process';
+dotenv.config();
+const execPromise = util.promisify(exec);
 
-const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
-const router = express.Router();
-router.use(cors());
-router.use(express.json());
+const PYTHON = process.env.PYTHON_PATH || "python3";
 
-// Global variables for loaded models info
-let modelsLoaded = false;
-let modelsInfo = {
-  indexSize: 0,
-  embeddingsDir: null,
-  normalizeEmbeddings: false,
-  useCosine: false
-};
+const PYTHON_SCRIPT = path.join(
+  process.cwd(),
+  "src/services/semanticSearchHelper.py"
+);
 
-/**
- * Find the results directory containing clustering results
- */
-function findResultsDir() {
-  const projectRoot = resolve(__dirname, '../../../..');
-  const possiblePaths = [
-    join(projectRoot, 'output'),
-    join(__dirname, '../../output'),
-    join(__dirname, '../../../output'),
-    'output'
-  ];
+export async function addVideoToIndex(videoPath) {
+  const resultsDir = path.join(__dirname, "results");
 
-  for (const path of possiblePaths) {
-    const resolvedPath = resolve(path);
-    const resultsFile = join(resolvedPath, 'clustering_results.npz');
-    if (existsSync(resultsFile)) {
-      return resolvedPath;
-    }
-  }
-
-  return null;
-}
-
-/**
- * Find Python executable (python3 or python)
- */
-async function findPythonCommand() {
-  try {
-    await execAsync('python3 --version');
-    return 'python3';
-  } catch {
-    try {
-      await execAsync('python --version');
-      return 'python';
-    } catch {
-      return 'python'; // Default fallback
-    }
-  }
-}
-
-/**
- * Load semantic search models info
- */
-async function loadModelsInfo() {
-  const resultsDir = findResultsDir();
-  if (!resultsDir) {
-    console.error('⚠️  Results directory not found. Semantic search will not be available.');
-    console.error('   Make sure you have run video_clustering.py to generate embeddings.');
-    return false;
-  }
-
-  try {
-    const pythonCmd = await findPythonCommand();
-    const pythonScript = join(__dirname, 'semanticSearchHelper.py');
-    
-    if (!existsSync(pythonScript)) {
-      console.error(`❌ Python helper script not found: ${pythonScript}`);
-      return false;
-    }
-    
-    console.log(`Loading semantic search models from: ${resultsDir}`);
-    // On Windows, use proper quoting; on Unix, paths should work as-is
-    const command = `"${pythonCmd}" "${pythonScript}" --operation info --results-dir "${resultsDir}"`;
-    
-    const { stdout, stderr } = await execAsync(command);
-    
-    if (stderr && !stdout) {
-      console.error('Python script error:', stderr);
-      return false;
-    }
-    
-    const info = JSON.parse(stdout);
-    
-    if (info.error) {
-      console.error('Failed to load models:', info.error);
-      return false;
-    }
-    
-    modelsInfo = {
-      indexSize: info.index_size || 0,
-      embeddingsDir: resultsDir,
-      normalizeEmbeddings: info.normalize_embeddings || false,
-      useCosine: info.use_cosine || false
-    };
-    modelsLoaded = true;
-    console.log(`✅ Loaded semantic search models from: ${resultsDir}`);
-    console.log(`   Index size: ${modelsInfo.indexSize} vectors`);
-    return true;
-  } catch (error) {
-    console.error('❌ Failed to load models info:', error.message);
-    if (error.stdout) console.error('   stdout:', error.stdout);
-    if (error.stderr) console.error('   stderr:', error.stderr);
-    return false;
-  }
-}
-
-/**
- * Call Python helper script for semantic search
- */
-async function callPythonHelper(operation, data) {
-  const resultsDir = modelsInfo.embeddingsDir || findResultsDir();
-  if (!resultsDir) {
-    throw new Error('Results directory not found');
-  }
-
-  const pythonCmd = await findPythonCommand();
-  const pythonScript = join(__dirname, 'semanticSearchHelper.py');
-  const args = [
-    pythonScript,
-    '--operation', operation,
-    '--results-dir', resultsDir,
-    '--data', JSON.stringify(data)
-  ];
-
-  return new Promise((resolve, reject) => {
-    const python = spawn(pythonCmd, args, {
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    python.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    python.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
-
-    python.on('close', (code) => {
-      if (code !== 0) {
-        const errorMsg = stderr || stdout || 'Unknown error';
-        console.error(`Python script failed (code ${code}):`, errorMsg);
-        reject(new Error(`Python script failed: ${errorMsg}`));
-      } else {
-        try {
-          if (!stdout.trim()) {
-            reject(new Error('Python script returned empty output'));
-            return;
-          }
-          const result = JSON.parse(stdout);
-          if (result.error) {
-            reject(new Error(result.error));
-          } else {
-            resolve(result);
-          }
-        } catch (e) {
-          console.error('Failed to parse Python output:', stdout);
-          console.error('Parse error:', e.message);
-          reject(new Error(`Failed to parse Python output: ${e.message}`));
-        }
-      }
-    });
-
-    python.on('error', (error) => {
-      console.error('Failed to spawn Python process:', error);
-      reject(new Error(`Failed to spawn Python process: ${error.message}`));
-    });
+  const payload = JSON.stringify({
+    operation: "add_to_index",
+    video_path: videoPath,
+    results_dir: resultsDir,
   });
+
+  const cmd = `"${PYTHON}" "${PYTHON_SCRIPT}" '${payload}'`;
+  console.log("🔍 Running:", cmd);
+
+  try {
+    const { stdout } = await execPromise(cmd);
+    console.log("✅ Python Output:", stdout.trim());
+
+    const jsonMatch = stdout.trim().match(/\{.*\}/);
+    if (!jsonMatch) throw new Error("No JSON returned");
+
+    return JSON.parse(jsonMatch[0]);
+  } catch (err) {
+    console.error("❌ Python Error:", err);
+    throw err;
+  }
 }
 
 // Health check endpoint

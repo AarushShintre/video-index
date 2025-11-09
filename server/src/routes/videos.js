@@ -24,4 +24,6 @@ router.delete('/:id', deleteVideo);
 router.post('/:id/similar', findSimilarVideos);
 router.get('/semantic-search/health', checkSemanticSearchHealth);
 
+
+
 export default router;

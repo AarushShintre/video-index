@@ -283,23 +283,31 @@ router.post('/search', async (req, res) => {
 router.post('/add_video', async (req, res) => {
   try {
     if (!modelsLoaded) {
-      return res.status(500).json({ error: 'Semantic search index not loaded' });
+      const loaded = await loadModelsInfo();
+      if (!loaded) {
+        return res.status(503).json({ 
+          error: 'Semantic search index not loaded',
+          message: 'Please run video_clustering.py to generate embeddings and index'
+        });
+      }
     }
 
     const { video_path, video_id } = req.body;
 
     if (!video_path || !existsSync(video_path)) {
-      return res.status(404).json({ error: 'Video file not found' });
+      return res.status(404).json({ error: `Video file not found: ${video_path}` });
     }
 
     // Call Python helper to extract embedding
     const result = await callPythonHelper('extract_embedding', {
-      video_path: video_path
+      video_path: video_path,
+      video_id: video_id
     });
 
     res.json({
-      message: 'Video embedding extracted (index update requires rebuild)',
-      embedding_shape: result.embedding_shape
+      message: 'Video embedding extracted successfully',
+      embedding_shape: result.embedding_shape,
+      note: 'Full index rebuild required to search this video. New videos are searchable immediately as query videos.'
     });
   } catch (error) {
     console.error('Add video error:', error);

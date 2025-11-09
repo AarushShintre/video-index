@@ -74,3 +74,58 @@ export const checkSemanticSearchHealth = async (req, res) => {
   }
 };
 
+/**
+ * Process a newly uploaded video for semantic search
+ * Extracts embeddings and finds similar videos
+ * @param {string} videoId - The video ID in the database
+ * @param {string} videoPath - Full path to the video file
+ * @returns {Object} Object containing similar videos or null if service unavailable
+ */
+export const processVideoForSemanticSearch = async (videoId, videoPath) => {
+  try {
+    // First, check if semantic search service is available
+    try {
+      await axios.get(`${SEMANTIC_SEARCH_URL}/health`, { timeout: 2000 });
+    } catch (healthError) {
+      console.warn('Semantic search service not available:', healthError.message);
+      return null;
+    }
+
+    // Extract embedding and add to index (if supported)
+    try {
+      await axios.post(`${SEMANTIC_SEARCH_URL}/add_video`, {
+        video_id: videoId,
+        video_path: videoPath
+      }, { timeout: 30000 }); // 30 second timeout for embedding extraction
+    } catch (addError) {
+      console.warn('Failed to add video to semantic search index:', addError.message);
+      // Continue to try searching even if adding fails
+    }
+
+    // Search for similar videos
+    try {
+      const searchResponse = await axios.post(`${SEMANTIC_SEARCH_URL}/search`, {
+        video_id: videoId,
+        video_path: videoPath,
+        k: 5
+      }, { timeout: 30000 }); // 30 second timeout for search
+
+      return {
+        success: true,
+        similarVideos: searchResponse.data.results || [],
+        count: searchResponse.data.count || 0
+      };
+    } catch (searchError) {
+      console.warn('Failed to search for similar videos:', searchError.message);
+      return {
+        success: false,
+        error: 'Search failed',
+        message: searchError.message
+      };
+    }
+
+  } catch (error) {
+    console.error('Error processing video for semantic search:', error.message);
+    return null;
+  }
+};

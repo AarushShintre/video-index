@@ -2,6 +2,11 @@ import db from '../config/database.js';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export const getAllVideos = async (req, res) => {
   try {
@@ -80,7 +85,26 @@ export const uploadVideo = async (req, res) => {
     );
 
     const video = await db.get('SELECT * FROM videos WHERE id = ?', [videoId]);
-    res.status(201).json(video);
+    
+    // Try to extract semantic embeddings and find similar videos
+    let semanticSearchResults = null;
+    try {
+      const { processVideoForSemanticSearch } = await import('./semanticSearchController.js');
+      const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
+      const fullVideoPath = path.join(uploadDir, req.file.filename);
+      semanticSearchResults = await processVideoForSemanticSearch(videoId, fullVideoPath);
+    } catch (semanticError) {
+      console.warn('Semantic search processing failed:', semanticError.message);
+      // Continue without semantic search results
+    }
+    
+    // Return video with optional semantic search results
+    const response = {
+      ...video,
+      semanticSearch: semanticSearchResults
+    };
+    
+    res.status(201).json(response);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

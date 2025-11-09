@@ -25,8 +25,10 @@ export const findSimilarVideos = async (req, res) => {
     }
 
     // Construct full path to video file
-    const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
-    const fullVideoPath = path.join(uploadDir, video.filepath);
+    const uploadDir = process.env.UPLOAD_DIR 
+      ? path.resolve(process.env.UPLOAD_DIR)
+      : path.resolve(__dirname, '../../uploads');
+    const fullVideoPath = path.resolve(uploadDir, video.filepath);
 
     // Call local semantic search service
     const response = await axios.post(`${SEMANTIC_SEARCH_URL}/search`, {

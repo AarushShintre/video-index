@@ -25,7 +25,17 @@ export const initDatabase = async () => {
       created_at INTEGER NOT NULL
     )
   `);
-  console.log('✅ Database initialized');
+  console.log('Database initialized');
+};
+
+export const resetDatabase = async () => {
+  try {
+    await db.run('DELETE FROM videos');
+    console.log('Database reset complete');
+  } catch (error) {
+    console.error('Error resetting database:', error);
+    throw error;
+  }
 };
 
 export default db;

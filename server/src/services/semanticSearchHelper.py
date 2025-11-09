@@ -137,7 +137,6 @@ def main():
     parser = argparse.ArgumentParser(description='Semantic Search Helper')
     parser.add_argument('--operation', type=str, help='Operation to perform: info, search, extract_embedding')
     parser.add_argument('--results-dir', type=str, help='Directory with clustering results')
-    parser.add_argument('--data', type=str, help='JSON data for operation')
     
     args = parser.parse_args()
     
@@ -165,7 +164,12 @@ def main():
         
         elif args.operation == 'search':
             load_models(args.results_dir)
-            data = json.loads(args.data)
+            # Read JSON data from stdin to avoid command-line argument parsing issues
+            stdin_data = sys.stdin.read()
+            if not stdin_data:
+                print(json.dumps({'error': 'No data provided via stdin'}), file=sys.stderr)
+                sys.exit(1)
+            data = json.loads(stdin_data)
             result = search_similar(
                 video_path=data['video_path'],
                 k=data.get('k', 5)
@@ -174,7 +178,12 @@ def main():
         
         elif args.operation == 'extract_embedding':
             load_models(args.results_dir)
-            data = json.loads(args.data)
+            # Read JSON data from stdin to avoid command-line argument parsing issues
+            stdin_data = sys.stdin.read()
+            if not stdin_data:
+                print(json.dumps({'error': 'No data provided via stdin'}), file=sys.stderr)
+                sys.exit(1)
+            data = json.loads(stdin_data)
             embedding = extract_embedding(data['video_path'])
             print(json.dumps({
                 'embedding_shape': list(embedding.shape)

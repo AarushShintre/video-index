@@ -261,7 +261,7 @@ if __name__ == '__main__':
         # Try different possible locations
         possible_paths = [
             '../../../output',  # From server/src/services to project root
-            '../../output',     # From server/src/services to server/output
+            'C:/Users/jerin/video-index/output'
             'output',           # Current directory
             Path(__file__).parent.parent.parent.parent / 'output'  # Absolute path to project root
         ]
@@ -288,16 +288,16 @@ if __name__ == '__main__':
     # Load models
     if load_semantic_search_models(args.results_dir):
         # Print registered routes for debugging
-        print("\n📋 Registered routes:")
+        print("\nRegistered routes:")
         for rule in app.url_map.iter_rules():
             methods = ', '.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))
             print(f"  {methods:20} {rule}")
         print()
         
-        print(f"✅ Semantic search service ready on port {args.port}")
+        print(f"Semantic search service ready on port {args.port}")
         app.run(host='0.0.0.0', port=args.port, debug=True)
     else:
-        print("❌ Failed to load semantic search models")
+        print("Failed to load semantic search models")
         print(f"Checked directory: {args.results_dir}")
         print("Make sure you've run video_clustering.py first to generate embeddings and index")
         print("Or specify the correct --results-dir path")

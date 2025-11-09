@@ -7,7 +7,7 @@ import express from 'express';
 import cors from 'cors';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import { dirname, join, resolve } from 'path';
+import { dirname, join, resolve, isAbsolute } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { promisify } from 'util';
 import { exec } from 'child_process';
@@ -53,29 +53,40 @@ function findResultsDir() {
 }
 
 /**
- * Find Python executable (python3 or python)
+ * Find Python executable (python3, python, or Windows-specific commands)
  */
 async function findPythonCommand() {
-  try {
-    await execAsync('python3 --version');
-    return 'python3';
-  } catch {
+  // Try common Python commands, with Windows-specific ones first
+  const commands = process.platform === 'win32' 
+    ? ['python', 'py313', 'py -3.13', 'py -3', 'py', 'python3']
+    : ['python3', 'python'];
+  
+  for (const cmd of commands) {
     try {
-      await execAsync('python --version');
-      return 'python';
-    } catch {
-      return 'python'; // Default fallback
+      // Use 'cmd /c' on Windows for commands with spaces (like 'py -3.13')
+      const testCmd = process.platform === 'win32' && cmd.includes(' ')
+        ? `cmd /c "${cmd} --version"`
+        : `${cmd} --version`;
+      
+      await execAsync(testCmd);
+      return cmd;
+    } catch (error) {
+      // Try next command
+      continue;
     }
   }
+  
+  // Default fallback
+  return 'python';
 }
 
 /**
  * Load semantic search models info
  */
-async function loadModelsInfo() {
+export async function loadModelsInfo() {
   const resultsDir = findResultsDir();
   if (!resultsDir) {
-    console.error('⚠️  Results directory not found. Semantic search will not be available.');
+    console.error('Results directory not found. Semantic search will not be available.');
     console.error('   Make sure you have run video_clustering.py to generate embeddings.');
     return false;
   }
@@ -85,7 +96,7 @@ async function loadModelsInfo() {
     const pythonScript = join(__dirname, 'semanticSearchHelper.py');
     
     if (!existsSync(pythonScript)) {
-      console.error(`❌ Python helper script not found: ${pythonScript}`);
+      console.error(`Python helper script not found: ${pythonScript}`);
       return false;
     }
     
@@ -114,11 +125,11 @@ async function loadModelsInfo() {
       useCosine: info.use_cosine || false
     };
     modelsLoaded = true;
-    console.log(`✅ Loaded semantic search models from: ${resultsDir}`);
+    console.log(`Loaded semantic search models from: ${resultsDir}`);
     console.log(`   Index size: ${modelsInfo.indexSize} vectors`);
     return true;
   } catch (error) {
-    console.error('❌ Failed to load models info:', error.message);
+    console.error('Failed to load models info:', error.message);
     if (error.stdout) console.error('   stdout:', error.stdout);
     if (error.stderr) console.error('   stderr:', error.stderr);
     return false;
@@ -139,17 +150,35 @@ async function callPythonHelper(operation, data) {
   const args = [
     pythonScript,
     '--operation', operation,
-    '--results-dir', resultsDir,
-    '--data', JSON.stringify(data)
+    '--results-dir', resultsDir
   ];
 
   return new Promise((resolve, reject) => {
-    const python = spawn(pythonCmd, args, {
-      stdio: ['pipe', 'pipe', 'pipe']
+    // Handle Windows commands with spaces (like 'py -3.13')
+    let command = pythonCmd;
+    let commandArgs = args;
+    
+    if (process.platform === 'win32' && pythonCmd.includes(' ')) {
+      // Split command like 'py -3.13' into ['py', '-3.13']
+      const parts = pythonCmd.split(' ');
+      command = parts[0];
+      commandArgs = [...parts.slice(1), ...args];
+    }
+    
+    // Pass data via stdin to avoid command-line argument parsing issues
+    const jsonData = JSON.stringify(data);
+    
+    const python = spawn(command, commandArgs, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: process.platform === 'win32' // Use shell on Windows for better compatibility
     });
 
     let stdout = '';
     let stderr = '';
+
+    // Write JSON data to stdin
+    python.stdin.write(jsonData);
+    python.stdin.end();
 
     python.stdout.on('data', (data) => {
       stdout += data.toString();
@@ -240,12 +269,23 @@ router.post('/search', async (req, res) => {
         const db = (await import('../config/database.js')).default;
         const video = await db.get('SELECT * FROM videos WHERE id = ?', [video_id]);
         if (video) {
-          const uploadDir = process.env.UPLOAD_DIR || join(__dirname, '../../uploads');
-          finalVideoPath = join(uploadDir, video.filepath);
+          const uploadDir = process.env.UPLOAD_DIR 
+            ? resolve(process.env.UPLOAD_DIR)
+            : resolve(__dirname, '../../uploads');
+          finalVideoPath = resolve(uploadDir, video.filepath);
         }
       } catch (dbError) {
         console.error('Database error:', dbError);
       }
+    }
+
+    // Normalize the path to absolute if it's relative
+    if (finalVideoPath && !isAbsolute(finalVideoPath)) {
+      // If it's a relative path, resolve it relative to uploads directory
+      const uploadDir = process.env.UPLOAD_DIR 
+        ? resolve(process.env.UPLOAD_DIR)
+        : resolve(__dirname, '../../uploads');
+      finalVideoPath = resolve(uploadDir, finalVideoPath);
     }
 
     // Handle URL paths - extract filename if it's a URL
@@ -253,7 +293,7 @@ router.post('/search', async (req, res) => {
       const filename = finalVideoPath.split('/').pop();
       const projectRoot = resolve(__dirname, '../../../..');
       const uploadsDir = join(projectRoot, 'server', 'uploads');
-      finalVideoPath = join(uploadsDir, filename);
+      finalVideoPath = resolve(uploadsDir, filename);
     }
 
     if (!finalVideoPath || !existsSync(finalVideoPath)) {

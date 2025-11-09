@@ -80,11 +80,20 @@ export const uploadVideo = async (req, res) => {
     );
 
     const video = await db.get('SELECT * FROM videos WHERE id = ?', [videoId]);
+
+    // ✅ BUILD ABSOLUTE FULL PATH HERE
+    const full_path = path.join(process.env.UPLOAD_DIR, video.filepath);
+
+    // ✅ Add it to returned JSON
+    video.full_path = full_path;
+
     res.status(201).json(video);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
+
+
 
 export const updateVideo = async (req, res) => {
   try {

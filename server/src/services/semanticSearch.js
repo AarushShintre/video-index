@@ -1,7 +1,8 @@
-/**
- * Express service for semantic video search using FAISS and embeddings.
- * Calls Python scripts for embedding extraction and FAISS operations.
- */
+import { exec } from "child_process";
+import path from "path";
+import util from "util";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
 
 import express from 'express';
 import cors from 'cors';
@@ -12,34 +13,18 @@ import { existsSync, readFileSync } from 'fs';
 import { promisify } from 'util';
 import { exec } from 'child_process';
 
-const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
-const router = express.Router();
-router.use(cors());
-router.use(express.json());
+const PYTHON = process.env.PYTHON_PATH || "python3";
 
-// Global variables for loaded models info
-let modelsLoaded = false;
-let modelsInfo = {
-  indexSize: 0,
-  embeddingsDir: null,
-  normalizeEmbeddings: false,
-  useCosine: false
-};
+const PYTHON_SCRIPT = path.join(
+  process.cwd(),
+  "src/services/semanticSearchHelper.py"
+);
 
-/**
- * Find the results directory containing clustering results
- */
-function findResultsDir() {
-  const projectRoot = resolve(__dirname, '../../../..');
-  const possiblePaths = [
-    join(projectRoot, 'output'),
-    join(__dirname, '../../output'),
-    join(__dirname, '../../../output'),
-    'output'
-  ];
+export async function addVideoToIndex(videoPath) {
+  const resultsDir = path.join(__dirname, "results");
 
   for (const path of possiblePaths) {
     const resolvedPath = resolve(path);
@@ -218,6 +203,22 @@ async function callPythonHelper(operation, data) {
       reject(new Error(`Failed to spawn Python process: ${error.message}`));
     });
   });
+
+  const cmd = `"${PYTHON}" "${PYTHON_SCRIPT}" '${payload}'`;
+  console.log("🔍 Running:", cmd);
+
+  try {
+    const { stdout } = await execPromise(cmd);
+    console.log("✅ Python Output:", stdout.trim());
+
+    const jsonMatch = stdout.trim().match(/\{.*\}/);
+    if (!jsonMatch) throw new Error("No JSON returned");
+
+    return JSON.parse(jsonMatch[0]);
+  } catch (err) {
+    console.error("❌ Python Error:", err);
+    throw err;
+  }
 }
 
 // Health check endpoint
@@ -323,23 +324,31 @@ router.post('/search', async (req, res) => {
 router.post('/add_video', async (req, res) => {
   try {
     if (!modelsLoaded) {
-      return res.status(500).json({ error: 'Semantic search index not loaded' });
+      const loaded = await loadModelsInfo();
+      if (!loaded) {
+        return res.status(503).json({ 
+          error: 'Semantic search index not loaded',
+          message: 'Please run video_clustering.py to generate embeddings and index'
+        });
+      }
     }
 
     const { video_path, video_id } = req.body;
 
     if (!video_path || !existsSync(video_path)) {
-      return res.status(404).json({ error: 'Video file not found' });
+      return res.status(404).json({ error: `Video file not found: ${video_path}` });
     }
 
     // Call Python helper to extract embedding
     const result = await callPythonHelper('extract_embedding', {
-      video_path: video_path
+      video_path: video_path,
+      video_id: video_id
     });
 
     res.json({
-      message: 'Video embedding extracted (index update requires rebuild)',
-      embedding_shape: result.embedding_shape
+      message: 'Video embedding extracted successfully',
+      embedding_shape: result.embedding_shape,
+      note: 'Full index rebuild required to search this video. New videos are searchable immediately as query videos.'
     });
   } catch (error) {
     console.error('Add video error:', error);

@@ -32,11 +32,16 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use('/uploads', express.static(UPLOAD_DIR));
 
+
+
 app.use('/api/videos', videoRoutes);
-app.use('/api/semantic-search', semanticSearchRoutes);
+
+// ✅ both semantic routes properly mounted
+app.use('/api/semantic-search', semanticUpdateRoutes);
+
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Server is running' });
+  res.json({ status: 'ok' });
 });
 
 /**
@@ -164,7 +169,11 @@ initializeServer().then(() => {
     console.log(`Uploads directory: ${UPLOAD_DIR}`);
     console.log(`Output directory: ${OUTPUT_DIR}\n`);
   });
+<<<<<<< HEAD
 }).catch(error => {
   console.error('Failed to initialize server:', error);
   process.exit(1);
 });
+=======
+});
+>>>>>>> main

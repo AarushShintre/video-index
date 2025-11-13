@@ -3,10 +3,18 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+<<<<<<< HEAD
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
+=======
 import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+>>>>>>> main
 
 export const getAllVideos = async (req, res) => {
   try {
@@ -135,7 +143,7 @@ export const deleteVideo = async (req, res) => {
       return res.status(404).json({ error: 'Video not found' });
     }
 
-    const filePath = path.join(process.env.UPLOAD_DIR, video.filepath);
+    const filePath = path.join(UPLOAD_DIR, video.filepath);
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }

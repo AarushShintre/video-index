@@ -101,26 +101,21 @@ def save_updated_index(results_dir):
     )
 
 def main():
-    print("✅ main() started")
-
-    args = json.loads(sys.argv[1])
-    operation = args.get("operation")
-    results_dir = args.get("results_dir")
-    video_path = args.get("video_path")
-
-    print("✅ operation:", operation)
-    print("✅ video_path:", video_path)
-    print("✅ results_dir:", results_dir)
-
-    load_models(results_dir)
-    print("✅ models loaded")
-
-    if operation == "add_to_index":
-        print("✅ ADDING TO INDEX...")
-
-        if not os.path.exists(video_path):
-            print(json.dumps({"error": "video not found"}))
-            return
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Semantic Search Helper')
+    parser.add_argument('--operation', type=str, help='Operation to perform: info, search, extract_embedding')
+    parser.add_argument('--results-dir', type=str, help='Directory with clustering results')
+    
+    args = parser.parse_args()
+    
+    if not args.results_dir:
+        # Try to find results directory
+        possible_paths = [
+            Path(__file__).parent.parent.parent.parent / 'output',
+            Path(__file__).parent / 'output',
+            Path.cwd() / 'output'
+        ]
         
         embedding = extract_embedding(video_path, model, preprocess)
         print("✅ embedding extracted?", embedding is not None)
@@ -162,7 +157,41 @@ print("✅ semanticSearchHelper.py STARTING")
 if __name__ == "__main__":
     print("✅ ENTERED main() guard")
     try:
-        main()
+        if args.operation == 'info':
+            info = get_model_info(args.results_dir)
+            print(json.dumps(info))
+        
+        elif args.operation == 'search':
+            load_models(args.results_dir)
+            # Read JSON data from stdin to avoid command-line argument parsing issues
+            stdin_data = sys.stdin.read()
+            if not stdin_data:
+                print(json.dumps({'error': 'No data provided via stdin'}), file=sys.stderr)
+                sys.exit(1)
+            data = json.loads(stdin_data)
+            result = search_similar(
+                video_path=data['video_path'],
+                k=data.get('k', 5)
+            )
+            print(json.dumps(result))
+        
+        elif args.operation == 'extract_embedding':
+            load_models(args.results_dir)
+            # Read JSON data from stdin to avoid command-line argument parsing issues
+            stdin_data = sys.stdin.read()
+            if not stdin_data:
+                print(json.dumps({'error': 'No data provided via stdin'}), file=sys.stderr)
+                sys.exit(1)
+            data = json.loads(stdin_data)
+            embedding = extract_embedding(data['video_path'])
+            print(json.dumps({
+                'embedding_shape': list(embedding.shape)
+            }))
+        
+        else:
+            print(json.dumps({'error': f'Unknown operation: {args.operation}'}), file=sys.stderr)
+            sys.exit(1)
+    
     except Exception as e:
         print("❌ ERROR IN main:", str(e))
 

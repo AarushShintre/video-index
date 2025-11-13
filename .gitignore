@@ -45,3 +45,10 @@ Desktop.ini
 
 server/uploads
 server/database.sqlite
+
+__pycache__/
+*.pyc
+
+*.npz
+*.bin
+*.pkl

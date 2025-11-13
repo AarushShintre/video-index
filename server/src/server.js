@@ -37,7 +37,7 @@ app.use('/uploads', express.static(UPLOAD_DIR));
 app.use('/api/videos', videoRoutes);
 
 // ✅ both semantic routes properly mounted
-app.use('/api/semantic-search', semanticUpdateRoutes);
+app.use('/api/semantic-search', semanticSearchRoutes);
 
 
 app.get('/api/health', (req, res) => {
@@ -169,11 +169,7 @@ initializeServer().then(() => {
     console.log(`Uploads directory: ${UPLOAD_DIR}`);
     console.log(`Output directory: ${OUTPUT_DIR}\n`);
   });
-<<<<<<< HEAD
 }).catch(error => {
   console.error('Failed to initialize server:', error);
   process.exit(1);
 });
-=======
-});
->>>>>>> main

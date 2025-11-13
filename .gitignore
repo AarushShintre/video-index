@@ -48,3 +48,4 @@ server/database.sqlite
 
 __pycache__/
 *.pyc
+package-lock.json

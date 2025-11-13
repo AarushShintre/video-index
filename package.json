@@ -1,0 +1,26 @@
+{
+  "name": "video-index",
+  "version": "0.0.1",
+  "description": "Deep Learning Semantic Video Search",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AarushShintre/video-index.git"
+  },
+  "keywords": [
+    "RAG"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/AarushShintre/video-index/issues"
+  },
+  "homepage": "https://github.com/AarushShintre/video-index#readme",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
